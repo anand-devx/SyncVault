@@ -1,88 +1,178 @@
 package com.syncvault.server;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.RandomAccessFile;
+import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/sync")
-@CrossOrigin(origins = "*")
 public class ChunkUploadController {
 
-    private final String STORAGE_DIR = "cloud_storage";
+    private static final String STORAGE_DIR = "/mnt/c/Users/dy873/Documents/CloudVault";
+    private static final String TEMP_DIR = STORAGE_DIR + "/temp_chunks";
 
+    // ==========================================
+    // 📦 1. RECEIVE MULTIPART CHUNK
+    // ==========================================
+    // ==========================================
+    // 📦 1. RECEIVE MULTIPART CHUNK
+    // ==========================================
     @PostMapping("/chunk")
-    public ResponseEntity<String> uploadChunk(
-            @RequestParam("file") MultipartFile file,
+    public ResponseEntity<String> receiveChunk(
             @RequestParam("filename") String filename,
-            @RequestParam("chunkIndex") int chunkIndex) {
+            @RequestParam("chunkIndex") int chunkIndex,
+            @RequestParam("file") MultipartFile file) {
         try {
-            Path storageDirectory = Paths.get(STORAGE_DIR);
-            if (!Files.exists(storageDirectory)) {
-                Files.createDirectories(storageDirectory);
-            }
-            String chunkName = filename + ".part" + chunkIndex;
-            Path targetLocation = storageDirectory.resolve(chunkName);
-            file.transferTo(targetLocation.toAbsolutePath().toFile());
+            // Clean up the relative path if it was URL-encoded by the client
+            String decodedPath = URLDecoder.decode(filename, "UTF-8");
             
-            System.out.println("✅ Received: " + chunkName);
-            return ResponseEntity.ok("Chunk " + chunkIndex + " saved successfully!");
-        } catch (IOException e) {
-            System.err.println("❌ Error saving chunk: " + e.getMessage());
-            return ResponseEntity.internalServerError().body("Failed to save chunk");
+            // Create a unique temporary directory for this specific file's chunks
+            Path chunkFolder = Paths.get(TEMP_DIR, decodedPath.replace("/", "_") + "_chunks");
+            Files.createDirectories(chunkFolder);
+
+            // Save the individual binary chunk
+            Path chunkFile = chunkFolder.resolve(String.valueOf(chunkIndex));
+            
+            // 🚀 THE FIX: Force Spring Boot to use the Absolute Path, not the Tomcat /tmp path!
+            file.transferTo(chunkFile.toAbsolutePath().toFile());
+
+            return ResponseEntity.ok("Chunk " + chunkIndex + " saved.");
+        } catch (Exception e) {
+            e.printStackTrace(); // Print full error to your WSL terminal just in case
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Chunk upload failed: " + e.getMessage());
         }
     }
-
-    // 🚀 NEW: The Reassembly Endpoint
+    // ==========================================
+    // 🧩 2. MERGE CHUNKS & REBUILD DIRECTORY TREE
+    // ==========================================
     @PostMapping("/merge")
     public ResponseEntity<String> mergeChunks(
             @RequestParam("filename") String filename,
             @RequestParam("totalChunks") int totalChunks) {
         try {
-            Path storageDirectory = Paths.get(STORAGE_DIR);
-            File mergedFile = new File(storageDirectory.toFile(), filename);
+            String decodedPath = URLDecoder.decode(filename, "UTF-8");
             
-            // 🚀 THE FIX: If the file already exists from a previous upload, delete it first!
-            if (mergedFile.exists()) {
-                mergedFile.delete();
+            // Define the ultimate destination inside cloud_storage
+            Path targetFilePath = Paths.get(STORAGE_DIR, decodedPath);
+            
+            // 🌳 THE FIX: Automatically create any sub-folders (like cloud_storage/Taxes/2026/)
+            if (targetFilePath.getParent() != null) {
+                Files.createDirectories(targetFilePath.getParent());
             }
-            
-            // Open the final file and glue the chunks in order
-            try (FileOutputStream fos = new FileOutputStream(mergedFile, true)) {
+
+            File outputFile = targetFilePath.toFile();
+            // Delete old version if it exists before rewriting
+            if (outputFile.exists()) outputFile.delete();
+
+            Path chunkFolder = Paths.get(TEMP_DIR, decodedPath.replace("/", "_") + "_chunks");
+
+            // Stitch the pieces back together sequentially
+            try (RandomAccessFile raf = new RandomAccessFile(outputFile, "rw")) {
                 for (int i = 0; i < totalChunks; i++) {
-                    File chunkFile = new File(storageDirectory.toFile(), filename + ".part" + i);
-                    Files.copy(chunkFile.toPath(), fos); 
-                    chunkFile.delete(); 
+                    Path chunkFile = chunkFolder.resolve(String.valueOf(i));
+                    if (!Files.exists(chunkFile)) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing chunk: " + i);
+                    }
+                    
+                    byte[] chunkBytes = Files.readAllBytes(chunkFile);
+                    raf.write(chunkBytes);
+                    
+                    // Clean up the temp chunk file immediately to save disk space
+                    Files.delete(chunkFile);
                 }
             }
-            System.out.println("🎉 Successfully merged chunks into: " + filename);
-            return ResponseEntity.ok("File merged successfully!");
+
+            // Clean up the empty temporary chunk directory
+            Files.deleteIfExists(chunkFolder);
             
-        } catch (IOException e) {
-            System.err.println("❌ Error merging file: " + e.getMessage());
-            return ResponseEntity.internalServerError().body("Failed to merge file");
+            System.out.println("🎉 File successfully assembled in cloud: " + decodedPath);
+            return ResponseEntity.ok("File merged successfully.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Merge failed: " + e.getMessage());
         }
     }
 
-    // 🚀 NEW: The Deletion Endpoint
+    // ==========================================
+    // 🗑️ 3. CLOUD DELETION ENDPOINT
+    // ==========================================
     @DeleteMapping("/delete-file/{filename}")
-    public ResponseEntity<String> deleteFile(@PathVariable String filename) {
+    public ResponseEntity<String> deleteFile(@PathVariable("filename") String filename) {
         try {
-            Path filePath = Paths.get(STORAGE_DIR).resolve(filename);
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-                System.out.println("🗑️ Deleted from cloud: " + filename);
-                return ResponseEntity.ok("Deleted successfully");
+            String decodedPath = URLDecoder.decode(filename, "UTF-8");
+            Path targetFilePath = Paths.get(STORAGE_DIR, decodedPath);
+
+            if (Files.exists(targetFilePath)) {
+                Files.delete(targetFilePath);
+                System.out.println("🗑️ File deleted from cloud storage: " + decodedPath);
+                
+                // Optional: Clean up empty parent directories left behind
+                Path parent = targetFilePath.getParent();
+                while (parent != null && !parent.getFileName().toString().equals(STORAGE_DIR)) {
+                    if (Files.isDirectory(parent) && Files.list(parent).findFirst().isEmpty()) {
+                        Files.delete(parent);
+                        parent = parent.getParent();
+                    } else {
+                        break;
+                    }
+                }
+                return ResponseEntity.ok("File deleted successfully.");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("File not found.");
             }
-            return ResponseEntity.notFound().build();
-        } catch (IOException e) {
-            System.err.println("❌ Error deleting file: " + e.getMessage());
-            return ResponseEntity.internalServerError().body("Failed to delete file");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Deletion failed: " + e.getMessage());
+        }
+    }
+
+    // ==========================================
+    // ⬇️ 4. CLOUD DOWNLOAD ENDPOINT
+    // ==========================================
+    @GetMapping("/download")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadFile(@RequestParam("filename") String filename) {
+        try {
+            String decodedPath = java.net.URLDecoder.decode(filename, "UTF-8");
+            Path file = Paths.get(STORAGE_DIR, decodedPath);
+            if (!Files.exists(file)) return ResponseEntity.notFound().build();
+            
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toUri());
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getFileName().toString() + "\"")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    // ==========================================
+    // 📋 5. CLOUD STATE ENDPOINT (For the Heartbeat)
+    // ==========================================
+    @GetMapping("/list")
+    public ResponseEntity<String> listFiles() {
+        try {
+            Path storageDir = Paths.get(STORAGE_DIR);
+            if (!Files.exists(storageDir)) return ResponseEntity.ok("");
+            
+            StringBuilder fileList = new StringBuilder();
+            Files.walk(storageDir)
+                 .filter(Files::isRegularFile)
+                 .forEach(path -> {
+                     String relative = storageDir.relativize(path).toString().replace("\\", "/");
+                     fileList.append(relative).append("\n");
+                 });
+            return ResponseEntity.ok(fileList.toString());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("");
         }
     }
 }
