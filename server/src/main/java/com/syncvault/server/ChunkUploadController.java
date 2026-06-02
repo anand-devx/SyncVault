@@ -47,12 +47,17 @@ public class ChunkUploadController {
             Path storageDirectory = Paths.get(STORAGE_DIR);
             File mergedFile = new File(storageDirectory.toFile(), filename);
             
+            // 🚀 THE FIX: If the file already exists from a previous upload, delete it first!
+            if (mergedFile.exists()) {
+                mergedFile.delete();
+            }
+            
             // Open the final file and glue the chunks in order
             try (FileOutputStream fos = new FileOutputStream(mergedFile, true)) {
                 for (int i = 0; i < totalChunks; i++) {
                     File chunkFile = new File(storageDirectory.toFile(), filename + ".part" + i);
-                    Files.copy(chunkFile.toPath(), fos); // Glue piece
-                    chunkFile.delete(); // Delete piece to clean up space
+                    Files.copy(chunkFile.toPath(), fos); 
+                    chunkFile.delete(); 
                 }
             }
             System.out.println("🎉 Successfully merged chunks into: " + filename);
@@ -61,6 +66,23 @@ public class ChunkUploadController {
         } catch (IOException e) {
             System.err.println("❌ Error merging file: " + e.getMessage());
             return ResponseEntity.internalServerError().body("Failed to merge file");
+        }
+    }
+
+    // 🚀 NEW: The Deletion Endpoint
+    @DeleteMapping("/delete-file/{filename}")
+    public ResponseEntity<String> deleteFile(@PathVariable String filename) {
+        try {
+            Path filePath = Paths.get(STORAGE_DIR).resolve(filename);
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                System.out.println("🗑️ Deleted from cloud: " + filename);
+                return ResponseEntity.ok("Deleted successfully");
+            }
+            return ResponseEntity.notFound().build();
+        } catch (IOException e) {
+            System.err.println("❌ Error deleting file: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Failed to delete file");
         }
     }
 }

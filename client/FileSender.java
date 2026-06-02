@@ -1,14 +1,33 @@
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 
 public class FileSender {
     private static final String CHUNK_URL = "http://localhost:8080/api/sync/chunk";
     private static final String MERGE_URL = "http://localhost:8080/api/sync/merge";
+    private static final String DELETE_URL = "http://localhost:8080/api/sync/delete-file/"; // 🚀 NEW
 
-    public static void main(String[] args) {
-        File file = new File("SyncFolder/massive.bin");
+    // 🚀 NEW: Tells the server to delete a file
+    public static void deleteFile(String filename) {
+        try {
+            // Because URLs can't have spaces, we safely encode the filename
+            String encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8").replace("+", "%20");
+            HttpURLConnection connection = (HttpURLConnection) URI.create(DELETE_URL + encodedFilename).toURL().openConnection();
+            connection.setRequestMethod("DELETE");
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode == 200) {
+                System.out.println("☁️ Successfully deleted " + filename + " from cloud!");
+            } else {
+                System.out.println("⚠️ Cloud file not found or already deleted.");
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Failed to reach server for deletion.");
+        }
+    }
+
+    // 🚀 NEW: We changed this to a reusable method that takes ANY file!
+    public static void uploadFile(File file) {
         if (!file.exists()) {
             System.out.println("❌ File not found!");
             return;
@@ -23,7 +42,6 @@ public class FileSender {
             int bytesRead;
             System.out.println("🚀 Starting upload of: " + file.getName());
 
-            // 1. Send all the chunks
             while ((bytesRead = fis.read(buffer)) != -1) {
                 byte[] chunkData = new byte[bytesRead];
                 System.arraycopy(buffer, 0, chunkData, 0, bytesRead);
@@ -38,7 +56,6 @@ public class FileSender {
                 totalChunks++;
             }
 
-            // 2. If all chunks sent, tell the server to merge them
             if (uploadSuccessful) {
                 System.out.println("🔄 Upload finished. Telling server to merge " + totalChunks + " chunks...");
                 if (triggerMerge(file.getName(), totalChunks)) {
@@ -50,7 +67,7 @@ public class FileSender {
                 System.out.println("🛑 Upload stopped due to an error.");
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("⚠️ File might be locked by another program. Will retry later.");
         }
     }
 
@@ -76,7 +93,6 @@ public class FileSender {
         return connection.getResponseCode() == 200;
     }
 
-    // 🚀 NEW: Tells the server to merge the file
     private static boolean triggerMerge(String filename, int totalChunks) throws Exception {
         String boundary = "SyncVaultBoundary" + System.currentTimeMillis();
         HttpURLConnection connection = (HttpURLConnection) URI.create(MERGE_URL).toURL().openConnection();
