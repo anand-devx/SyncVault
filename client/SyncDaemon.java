@@ -2,6 +2,7 @@ import java.nio.file.*;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 public class SyncDaemon {
     // A map to remember the last time we processed a specific file
@@ -44,11 +45,17 @@ public class SyncDaemon {
 
                     if (currentTime - lastTime > DEBOUNCE_DELAY_MS) {
                         System.out.println("✅ [PROCESSED " + kind.name() + "] -> " + filename);
-                        
-                        // Update the map with the new time
                         lastProcessedTime.put(fileKey, currentTime);
                         
-                        // TODO: In Phase 2, this is where we will trigger the Chunking/Hashing algorithm!
+                        // 👉 NEW: If it's a Create or Modify event, chunk and hash the file!
+                        if (kind == StandardWatchEventKinds.ENTRY_CREATE || kind == StandardWatchEventKinds.ENTRY_MODIFY) {
+                            String fullPath = syncDirectory.resolve(filename).toString();
+                            System.out.println("   ⚙️ Processing file blocks...");
+                            
+                            // Call our new Engine
+                            List<String> hashes = FileChunker.processFile(fullPath);
+                            System.out.println("   🚀 File mapped to " + hashes.size() + " block(s).\n");
+                        }
                     } else {
                         // We caught a duplicate OS event! Ignore it.
                         System.out.println("   [IGNORED DUPLICATE] -> " + filename);
