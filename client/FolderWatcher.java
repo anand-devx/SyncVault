@@ -2,19 +2,18 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FolderWatcher {
-    private static WatchService watchService;
-    private static final Map<WatchKey, Path> keys = new HashMap<>();
     private static Path syncDirectory;
-
-    // 🧠 THE MEMORY BANK: Tracks files modified by the server
-    private static final Set<String> maskedEvents = ConcurrentHashMap.newKeySet();
+    
+    // 🧠 THE MEMORY BANKS
+    private static final Set<String> maskedEvents = ConcurrentHashMap.newKeySet(); // Stops Two-Way Sync loops
+    private static Map<String, Long> previousState = new HashMap<>();              // Tracks file timestamps
 
     public static void maskEvent(String relativePath) {
         maskedEvents.add(relativePath.replace("\\", "/"));
@@ -26,80 +25,90 @@ public class FolderWatcher {
 
         try {
             Files.createDirectories(syncDirectory);
-            watchService = FileSystems.getDefault().newWatchService();
-            registerAll(syncDirectory);
-
-            System.out.println("👀 SyncVault Daemon is active (Two-Way Masking Mode).");
+            System.out.println("👀 SyncVault Daemon active (Lock-Free Polling Mode).");
             System.out.println("📂 Watching folder & sub-folders: " + syncDirectory.toAbsolutePath());
 
+            // Take the initial baseline snapshot so we don't upload everything on boot
+            previousState = takeSnapshot();
+
+            // The Lock-Free Polling Loop
             while (true) {
-                WatchKey key;
-                try { key = watchService.take(); } catch (InterruptedException ex) { return; }
-
-                Path dir = keys.get(key);
-                if (dir == null) continue;
-
-                for (WatchEvent<?> event : key.pollEvents()) {
-                    WatchEvent.Kind<?> kind = event.kind();
-                    Path name = (Path) event.context();
-                    Path child = dir.resolve(name);
-                    
-                    String relativePath = syncDirectory.relativize(child).toString().replace("\\", "/");
-
-                    if (kind == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(child)) {
-                        System.out.println("📁 New folder detected, attaching watcher: " + relativePath);
-                        registerAll(child);
-                        continue; 
-                    }
-
-                    boolean isKnownJunk = relativePath.endsWith(".tmp") || relativePath.startsWith("~") || relativePath.contains("Zone.Identifier");
-                    if (isKnownJunk) continue;
-
-                    // 🛡️ THE SHIELD: Prevent Echo Loop
-                    if (maskedEvents.contains(relativePath)) {
-                        System.out.println("🛡️ Event masked (Server-originated action): " + relativePath + " [" + kind + "] -> Ignoring loop.");
-                        maskedEvents.remove(relativePath); 
-                        continue;
-                    }
-
-                    if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
-                        System.out.println("🗑️ Detected local DELETE on: " + relativePath);
-                        FileSender.deleteFile(relativePath);
-                        continue;
-                    }
-
-                    File changedFile = child.toFile();
-                    if (changedFile.isFile() && (kind == StandardWatchEventKinds.ENTRY_CREATE || kind == StandardWatchEventKinds.ENTRY_MODIFY)) {
-                        System.out.println("\n⚡ Detected event on: " + relativePath + " - Waiting for lock...");
-                        if (waitForUnlock(changedFile)) {
-                            System.out.println("✅ Lock released! Starting upload...");
-                            FileSender.uploadFile(changedFile, relativePath); 
-                        }
-                    }
-                }
-                
-                boolean valid = key.reset();
-                if (!valid) keys.remove(key);
+                Thread.sleep(2000); // Check every 2 seconds
+                scanForChanges();
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private static void registerAll(final Path start) throws IOException {
-        Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                WatchKey key = dir.register(watchService, 
-                    StandardWatchEventKinds.ENTRY_CREATE, 
-                    StandardWatchEventKinds.ENTRY_MODIFY, 
-                    StandardWatchEventKinds.ENTRY_DELETE);
-                keys.put(key, dir);
-                return FileVisitResult.CONTINUE;
+    // ==========================================
+    // 📸 THE SNAPSHOT ENGINE
+    // ==========================================
+    private static void scanForChanges() {
+        Map<String, Long> currentState = takeSnapshot();
+
+        // 1. Check for NEW or MODIFIED files
+        for (Map.Entry<String, Long> entry : currentState.entrySet()) {
+            String relativePath = entry.getKey();
+            Long currentTimestamp = entry.getValue();
+            Long previousTimestamp = previousState.get(relativePath);
+
+            if (previousTimestamp == null || !previousTimestamp.equals(currentTimestamp)) {
+                // 🛡️ The Shield: Did the server do this?
+                if (maskedEvents.contains(relativePath)) {
+                    System.out.println("🛡️ Event masked (Server download): " + relativePath);
+                    maskedEvents.remove(relativePath);
+                    continue; 
+                }
+
+                File changedFile = syncDirectory.resolve(relativePath).toFile();
+                if (waitForUnlock(changedFile)) {
+                    System.out.println("\n⚡ Detected local change on: " + relativePath);
+                    FileSender.uploadFile(changedFile, relativePath);
+                }
             }
-        });
+        }
+
+        // 2. Check for DELETED files
+        for (String oldFilePath : previousState.keySet()) {
+            if (!currentState.containsKey(oldFilePath)) {
+                // 🛡️ The Shield: Did the server tell us to delete this?
+                if (maskedEvents.contains(oldFilePath)) {
+                    System.out.println("🛡️ Event masked (Server delete): " + oldFilePath);
+                    maskedEvents.remove(oldFilePath);
+                    continue;
+                }
+
+                System.out.println("🗑️ Detected local DELETE on: " + oldFilePath);
+                FileSender.deleteFile(oldFilePath);
+            }
+        }
+
+        // Update the baseline for the next 2-second cycle
+        previousState = currentState;
     }
 
+    // Reads the entire folder tree and returns a map of [File Path -> Last Modified Time]
+    private static Map<String, Long> takeSnapshot() {
+        Map<String, Long> state = new HashMap<>();
+        if (!Files.exists(syncDirectory)) return state;
+
+        try (java.util.stream.Stream<Path> stream = Files.walk(syncDirectory)) {
+            stream.filter(Files::isRegularFile).forEach(path -> {
+                String relativePath = syncDirectory.relativize(path).toString().replace("\\", "/");
+                
+                // Ignore junk Windows system files
+                if (relativePath.endsWith(".tmp") || relativePath.startsWith("~") || relativePath.contains("Zone.Identifier")) return;
+                
+                state.put(relativePath, path.toFile().lastModified());
+            });
+        } catch (IOException ignored) {}
+        return state;
+    }
+
+    // ==========================================
+    // 🛡️ THE FILE LOCK PATIENT POLLER
+    // ==========================================
     private static boolean waitForUnlock(File file) {
         int maxRetries = 10;
         for (int i = 0; i < maxRetries; i++) {
@@ -111,6 +120,6 @@ public class FolderWatcher {
                 try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             }
         }
-        return false;
+        return false; // Gave up waiting for Windows to release the file
     }
 }

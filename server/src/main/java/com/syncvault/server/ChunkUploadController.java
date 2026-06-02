@@ -92,8 +92,23 @@ public class ChunkUploadController {
             }
 
             // Clean up the empty temporary chunk directory
-            Files.deleteIfExists(chunkFolder);
+            // Files.deleteIfExists(chunkFolder);
             
+            /// 🧨 THE NUKE: Recursively annihilate the chunks the exact second the merge is done
+            if (Files.exists(chunkFolder)) {
+                Files.walk(chunkFolder)
+                     .sorted(java.util.Comparator.reverseOrder())
+                     .map(Path::toFile)
+                     .forEach(File::delete);
+            }
+            File masterTemp = Paths.get(TEMP_DIR).toFile();
+            if (masterTemp.exists()) {
+                // .delete() only works on directories if they are 100% empty.
+                // If another file is still uploading, this safely does nothing!
+                masterTemp.delete(); 
+            }
+            // System.out.println("🎉 File successfully assembled and temp chunks vaporized: " + decodedPath);
+
             System.out.println("🎉 File successfully assembled in cloud: " + decodedPath);
             return ResponseEntity.ok("File merged successfully.");
         } catch (Exception e) {
@@ -166,6 +181,8 @@ public class ChunkUploadController {
             StringBuilder fileList = new StringBuilder();
             Files.walk(storageDir)
                  .filter(Files::isRegularFile)
+                 // 🙈 THE BLINDFOLD: Hide temp files from the Windows Heartbeat
+                 .filter(path -> !path.toString().contains("temp_chunks"))
                  .forEach(path -> {
                      String relative = storageDir.relativize(path).toString().replace("\\", "/");
                      fileList.append(relative).append("\n");
