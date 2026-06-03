@@ -4,7 +4,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 
 public class FileSender {
-    private static final String BASE_URL = "http://172.22.54.83:8080/api/sync";
+    private static final String BASE_URL = ConfigManager.SERVER_URL + "/api/sync";
     private static final String CHUNK_URL = BASE_URL + "/chunk";
     private static final String MERGE_URL = BASE_URL + "/merge";
     private static final String DELETE_URL = BASE_URL + "/delete-file/";

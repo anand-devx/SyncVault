@@ -8,8 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public class FileReceiver {
-    private static final Path syncDirectory = Paths.get(System.getProperty("user.home"), "Desktop", "SyncFolder");
-    private static final String BASE_URL = "http://172.22.54.83:8080/api/sync/download?filename=";
+    private static final Path syncDirectory = Paths.get(ConfigManager.SYNC_DIR_PATH);
+    private static final String BASE_URL = ConfigManager.SERVER_URL + "/api/sync/download?filename=";
 
     // ==========================================
     // ☁️🛬 SERVER COMMAND: Download New/Modified File

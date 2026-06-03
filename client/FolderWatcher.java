@@ -20,8 +20,7 @@ public class FolderWatcher {
     }
 
     public static void startWatching() {
-        Path userHome = Paths.get(System.getProperty("user.home"));
-        syncDirectory = userHome.resolve("Desktop").resolve("SyncFolder");
+        syncDirectory = Paths.get(ConfigManager.SYNC_DIR_PATH);
 
         try {
             Files.createDirectories(syncDirectory);
