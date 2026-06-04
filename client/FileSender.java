@@ -89,7 +89,10 @@ public class FileSender {
             request.write(chunkData);
             request.writeBytes("\r\n--" + boundary + "--\r\n");
             request.flush();
-        } catch (Exception e) { return false; }
+        } catch (Exception e) { 
+                    System.out.println("❌ Network Error on Chunk: " + e.getMessage());
+                    return false; 
+                }
         return connection.getResponseCode() == 200;
     }
 
@@ -107,7 +110,10 @@ public class FileSender {
             request.writeBytes("Content-Disposition: form-data; name=\"totalChunks\"\r\n\r\n" + totalChunks + "\r\n");
             request.writeBytes("--" + boundary + "--\r\n");
             request.flush();
-        } catch (Exception e) { return false; }
+        } catch (Exception e) { 
+                    System.out.println("❌ Network Error on Chunk: " + e.getMessage());
+                    return false; 
+                }
         return connection.getResponseCode() == 200;
     }
 }

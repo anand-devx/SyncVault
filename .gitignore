@@ -4,7 +4,12 @@
 # Prevents uploading massive user files to GitHub
 client/SyncFolder/
 server/cloud_storage/
-
+client/secrets.txt
+server/syncvault-key.pem
+server/syncvault-instance-key.pem
+server/syncvault-instance-key.pem:Zone.Identifier
+server/syncvault-key.pem:Zone.Identifier
+*Zone.Identifier*
 # ==========================================
 # 2. COMPILED JAVA & BUILD FILES
 # ==========================================

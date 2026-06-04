@@ -131,6 +131,47 @@ public class SyncDaemon {
                     if (!file.isEmpty()) cloudFiles.add(file);
                 }
             }
+            // ... (Your existing code that fetches 'cloudFiles' from the Spring Boot API) ...
+
+            // 1. 🏗️ Build "Implicit Folders" from the raw S3 file paths
+            Set<String> currentCloudFolders = new HashSet<>();
+            for (String file : cloudFiles) {
+                String[] parts = file.split("/");
+                String folderPath = "";
+                for (int i = 0; i < parts.length - 1; i++) {
+                    folderPath += (i == 0 ? "" : "/") + parts[i];
+                    currentCloudFolders.add(folderPath);
+                }
+            }
+
+            // 2. 🧠 Fetch the memory of the Cloud from 10 seconds ago
+            Set<String> lastKnownFolders = DatabaseManager.getLastKnownFolders();
+
+            // 3. 🔎 The True Diff: Find what the cloud user deleted
+            for (String oldFolder : lastKnownFolders) {
+                if (!currentCloudFolders.contains(oldFolder)) {
+                    // The folder existed in the DB, but AWS no longer reports it!
+                    Path localDirPath = syncDir.resolve(oldFolder);
+                    
+                    if (Files.exists(localDirPath)) {
+                        try {
+                            // Only delete it if it's actually empty (safety check)
+                            if (Files.list(localDirPath).findFirst().isEmpty()) {
+                                Files.delete(localDirPath);
+                                System.out.println("🧹 Cloud folder deletion synced to local: " + oldFolder);
+                            }
+                        } catch (Exception e) {
+                            // Ignore if Windows has the folder locked
+                        }
+                    }
+                }
+            }
+
+            // 4. 🗑️ Execute Standard File Deletion
+            // (Keep your existing Files.walk(syncDir) code here that deletes local files if they aren't in cloudFiles)
+
+            // 5. 💾 Save the new reality to the database for the next heartbeat
+            DatabaseManager.updateCloudState(cloudFiles, currentCloudFolders);
             
             System.out.println("🫀 Heartbeat check... Cloud has " + cloudFiles.size() + " files.");
 
