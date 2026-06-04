@@ -145,61 +145,68 @@ public class SyncDaemon {
             }
 
             // 2. 🧠 Fetch the memory of the Cloud from 10 seconds ago
-            Set<String> lastKnownFolders = DatabaseManager.getLastKnownFolders();
-
-            // 3. 🔎 The True Diff: Find what the cloud user deleted
-            for (String oldFolder : lastKnownFolders) {
-                if (!currentCloudFolders.contains(oldFolder)) {
-                    // The folder existed in the DB, but AWS no longer reports it!
-                    Path localDirPath = syncDir.resolve(oldFolder);
-                    
-                    if (Files.exists(localDirPath)) {
-                        try {
-                            // Only delete it if it's actually empty (safety check)
-                            if (Files.list(localDirPath).findFirst().isEmpty()) {
-                                Files.delete(localDirPath);
-                                System.out.println("🧹 Cloud folder deletion synced to local: " + oldFolder);
+                        Set<String> lastKnownFolders = DatabaseManager.getLastKnownFolders();
+                        Set<String> lastKnownFiles = DatabaseManager.getLastKnownFiles(); // 👈 ADD THIS: Fetch file memory!
+            
+                        // 3. 🔎 The True Diff: Find what the cloud user deleted (Folders)
+                        for (String oldFolder : lastKnownFolders) {
+                            if (!currentCloudFolders.contains(oldFolder)) {
+                                Path localDirPath = syncDir.resolve(oldFolder);
+                                if (Files.exists(localDirPath)) {
+                                    try {
+                                        if (Files.list(localDirPath).findFirst().isEmpty()) {
+                                            Files.delete(localDirPath);
+                                            System.out.println("🧹 Cloud folder deletion synced to local: " + oldFolder);
+                                        }
+                                    } catch (Exception e) {}
+                                }
                             }
-                        } catch (Exception e) {
-                            // Ignore if Windows has the folder locked
                         }
+            
+                        System.out.println("🫀 Heartbeat check... Cloud has " + cloudFiles.size() + " files.");
+            
+                        // 4. ⬇️ Download new files from cloud
+                        for (String cloudFile : cloudFiles) {
+                            if (cloudFile.contains("Zone.Identifier") || cloudFile.contains(":")) continue;
+            
+                            Path localPath = syncDir.resolve(cloudFile);
+                            if (!Files.exists(localPath)) {
+                                // 🧠 THE CHECK: Did the user just delete this, or is it actually new?
+                                if (lastKnownFiles.contains(cloudFile)) {
+                                    // We knew about it, but it's gone locally. The user just deleted it!
+                                    // Do NOT redownload it. Let the FolderWatcher finish telling the server to delete it.
+                                    // System.out.println("⏳ Heartbeat ignoring local deletion waiting for server sync: " + cloudFile);
+                                } else {
+                                    // We NEVER knew about this file. It is genuinely a brand new file from the cloud!
+                                    System.out.println("🔎 Heartbeat found new cloud file: " + cloudFile);
+                                    FileReceiver.downloadFileFromServer(cloudFile);
+                                }
+                            }
+                        }
+                        // 5. 🗑️ Execute Standard File Deletion (WITH THE BRAIN UPGRADE AND LEAK FIX)
+                                    if (Files.exists(syncDir)) {
+                                        try (java.util.stream.Stream<Path> stream = Files.walk(syncDir)) {
+                                            stream.filter(Files::isRegularFile)
+                                                  .forEach(localFile -> {
+                                                      String relative = syncDir.relativize(localFile).toString().replace("\\", "/");
+                                                      if (relative.endsWith(".tmp") || relative.startsWith("~") || relative.contains("Zone.Identifier")) return;
+                        
+                                                      if (!cloudFiles.contains(relative)) {
+                                                          // 🧠 THE CHECK: Was it previously in the cloud?
+                                                          if (lastKnownFiles.contains(relative)) {
+                                                              System.out.println("🔎 Heartbeat noticed cloud deleted: " + relative);
+                                                              FileReceiver.deleteFileLocally(relative);
+                                                          }
+                                                      }
+                                                  });
+                                        } // <--- Java automatically closes the OS file handle here!
+                                    }
+            
+                        // 6. 💾 MOVED TO THE VERY BOTTOM: Save the new reality to the database
+                        DatabaseManager.updateCloudState(cloudFiles, currentCloudFolders);
+                        
+                    } catch (Exception e) {
+                        System.out.println("❌ Heartbeat Network Error: " + e.getMessage());
                     }
                 }
             }
-
-            // 4. 🗑️ Execute Standard File Deletion
-            // (Keep your existing Files.walk(syncDir) code here that deletes local files if they aren't in cloudFiles)
-
-            // 5. 💾 Save the new reality to the database for the next heartbeat
-            DatabaseManager.updateCloudState(cloudFiles, currentCloudFolders);
-            
-            System.out.println("🫀 Heartbeat check... Cloud has " + cloudFiles.size() + " files.");
-
-            for (String cloudFile : cloudFiles) {
-                if (cloudFile.contains("Zone.Identifier") || cloudFile.contains(":")) continue;
-
-                Path localPath = syncDir.resolve(cloudFile);
-                if (!Files.exists(localPath)) {
-                    System.out.println("🔎 Heartbeat found new cloud file: " + cloudFile);
-                    FileReceiver.downloadFileFromServer(cloudFile);
-                }
-            }
-
-            if (Files.exists(syncDir)) {
-                Files.walk(syncDir)
-                     .filter(Files::isRegularFile)
-                     .forEach(localFile -> {
-                         String relative = syncDir.relativize(localFile).toString().replace("\\", "/");
-                         if (relative.endsWith(".tmp") || relative.startsWith("~") || relative.contains("Zone.Identifier")) return;
-
-                         if (!cloudFiles.contains(relative)) {
-                             System.out.println("🔎 Heartbeat noticed cloud deleted: " + relative);
-                             FileReceiver.deleteFileLocally(relative);
-                         }
-                     });
-            }
-        } catch (Exception e) {
-            System.out.println("❌ Heartbeat Network Error: " + e.getMessage());
-        }
-    }
-}

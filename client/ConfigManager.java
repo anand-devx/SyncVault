@@ -79,18 +79,31 @@ public class ConfigManager {
     }
 
     public static void saveSettings(String newUrl, String newDir) {
-        SERVER_URL = newUrl;
-        SYNC_DIR_PATH = newDir;
-
-        Properties props = new Properties();
-        props.setProperty("SERVER_URL", SERVER_URL);
-        props.setProperty("SYNC_DIR", SYNC_DIR_PATH);
-
-        try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
-            props.store(fos, "SyncVault Client Configuration Updated via UI");
-            System.out.println("💾 Settings saved successfully to disk!");
-        } catch (IOException e) {
-            System.out.println("❌ Failed to save new settings.");
+            SERVER_URL = newUrl;
+            SYNC_DIR_PATH = newDir;
+    
+            Properties props = new Properties();
+            File file = new File(CONFIG_FILE);
+    
+            // 1. Read the existing file first so we don't delete other settings
+            if (file.exists()) {
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    props.load(fis);
+                } catch (IOException e) {
+                    System.out.println("⚠️ Could not load existing settings, creating new.");
+                }
+            }
+    
+            // 2. Update only what we need
+            props.setProperty("SERVER_URL", SERVER_URL);
+            props.setProperty("SYNC_DIR", SYNC_DIR_PATH);
+    
+            // 3. Save it securely
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                props.store(fos, "SyncVault Client Configuration Updated via UI");
+                System.out.println("💾 Settings saved successfully to disk!");
+            } catch (IOException e) {
+                System.out.println("❌ Failed to save new settings: " + e.getMessage());
+            }
         }
-    }
 }

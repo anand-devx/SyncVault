@@ -1,4 +1,4 @@
-package com.syncvault.server; // Adjust if your package is com.syncvault.server.controller
+package com.syncvault.server; 
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
@@ -30,17 +30,17 @@ public class ChunkUploadController {
     private S3Service s3Service;
 
     @Autowired
-    private AmazonS3 s3Client; // We inject this for List and Download
+    private AmazonS3 s3Client; 
 
     @Value("${aws.s3.bucket.name}")
     private String bucketName;
 
-    // We no longer store files permanently! This is just a temporary staging area.
-    private static final String STAGING_DIR = "/mnt/c/Users/dy873/Documents/CloudVault/staging";
-    private static final String TEMP_DIR = "/mnt/c/Users/dy873/Documents/CloudVault/temp_chunks";
+    // 🚨 FIX 1: Universal Cloud-Safe Folders (Works on Windows, Linux, and AWS EC2)
+    private static final String STAGING_DIR = System.getProperty("java.io.tmpdir") + "/syncvault_staging";
+    private static final String TEMP_DIR = System.getProperty("java.io.tmpdir") + "/syncvault_chunks";
 
     // ==========================================
-    // 📦 1. RECEIVE MULTIPART CHUNK (No changes needed)
+    // 📦 1. RECEIVE MULTIPART CHUNK
     // ==========================================
     @PostMapping("/chunk")
     public ResponseEntity<String> receiveChunk(
@@ -91,14 +91,14 @@ public class ChunkUploadController {
                     }
                     byte[] chunkBytes = Files.readAllBytes(chunkFile);
                     raf.write(chunkBytes);
-                    Files.delete(chunkFile); // Delete chunk immediately
+                    Files.delete(chunkFile); 
                 }
             }
 
-            // 2. 🚀 THE BRAIN TRANSPLANT: Push assembled file to AWS S3!
+            // 2. 🚀 Push assembled file to AWS S3
             s3Service.uploadFile(decodedPath, outputFile);
 
-            // 3. 🗑️ Clean up: Delete the local staging file and chunk folders
+            // 3. 🗑️ Clean up
             outputFile.delete(); 
             
             if (Files.exists(chunkFolder)) {
@@ -119,12 +119,12 @@ public class ChunkUploadController {
     // ==========================================
     // 🗑️ 3. CLOUD DELETION ENDPOINT
     // ==========================================
-    @DeleteMapping("/delete-file/{filename}")
-    public ResponseEntity<String> deleteFile(@PathVariable("filename") String filename) {
+    // 🚨 FIX 2: Query Parameter safely handles sub-folders without 404 errors!
+    @DeleteMapping("/delete-file")
+    public ResponseEntity<String> deleteFile(@RequestParam("filename") String filename) {
         try {
             String decodedPath = URLDecoder.decode(filename, "UTF-8");
             
-            // Just tell AWS to delete it! No messy folder logic required.
             s3Service.deleteFile(decodedPath);
             
             return ResponseEntity.ok("File deleted from AWS S3 successfully.");
@@ -142,7 +142,6 @@ public class ChunkUploadController {
         try {
             String decodedPath = URLDecoder.decode(filename, "UTF-8");
             
-            // Fetch directly from AWS S3
             S3Object s3Object = s3Client.getObject(bucketName, decodedPath);
             InputStreamResource resource = new InputStreamResource(s3Object.getObjectContent());
 
@@ -156,12 +155,11 @@ public class ChunkUploadController {
     }
 
     // ==========================================
-    // 📋 5. CLOUD STATE ENDPOINT (For the Heartbeat)
+    // 📋 5. CLOUD STATE ENDPOINT
     // ==========================================
     @GetMapping("/list")
     public ResponseEntity<String> listFiles() {
         try {
-            // Ask AWS for a list of everything in the bucket
             ListObjectsV2Result result = s3Client.listObjectsV2(bucketName);
             StringBuilder fileList = new StringBuilder();
             

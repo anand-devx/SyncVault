@@ -45,38 +45,63 @@ public class DatabaseManager {
         }
         return folders;
     }
-
-    public static synchronized void updateCloudState(Set<String> files, Set<String> folders) {
-        ensureConnected(); // Check safety before writing!
+    // ==========================================
+        // 🧠 FETCH FILE MEMORY
+        // ==========================================
+        // ==========================================
+            // 🧠 FETCH FILE MEMORY
+            // ==========================================
+            public static synchronized Set<String> getLastKnownFiles() {
+                ensureConnected(); // Check safety before reading!
+                
+                Set<String> files = new HashSet<>();
+                if (globalConn == null) return files;
         
-        if (globalConn == null) return;
-
-        try {
-            globalConn.setAutoCommit(false); 
-            
-            try (Statement stmt = globalConn.createStatement()) {
-                stmt.execute("DELETE FROM CloudState"); 
-            }
-            
-            try (PreparedStatement pstmt = globalConn.prepareStatement("INSERT INTO CloudState (path, is_dir) VALUES (?, ?)")) {
-                for (String file : files) {
-                    pstmt.setString(1, file);
-                    pstmt.setBoolean(2, false);
-                    pstmt.addBatch();
+                // Select the 'path' column where it is a file (is_dir = 0)
+                try (Statement stmt = globalConn.createStatement();
+                     ResultSet rs = stmt.executeQuery("SELECT path FROM CloudState WHERE is_dir = 0")) {
+                     
+                    while (rs.next()) {
+                        files.add(rs.getString("path")); // Fetch the correct column!
+                    }
+                } catch (Exception e) { 
+                    System.out.println("❌ DB Read Error: " + e.getMessage()); 
                 }
-                for (String folder : folders) {
-                    pstmt.setString(1, folder);
-                    pstmt.setBoolean(2, true);
-                    pstmt.addBatch();
-                }
-                pstmt.executeBatch();
+                return files;
             }
-            globalConn.commit(); 
-            globalConn.setAutoCommit(true); 
+            public static synchronized void updateCloudState(Set<String> files, Set<String> folders) {
+                    ensureConnected(); // Check safety before writing!
+                    
+                    if (globalConn == null) return;
             
-        } catch (Exception e) { 
-            System.out.println("❌ DB Write Error: " + e.getMessage()); 
-            try { globalConn.rollback(); } catch (SQLException ex) {}
-        }
-    }
+                    try {
+                        globalConn.setAutoCommit(false); 
+                        
+                        try (Statement stmt = globalConn.createStatement()) {
+                            stmt.execute("DELETE FROM CloudState"); 
+                        }
+                        
+                        try (PreparedStatement pstmt = globalConn.prepareStatement("INSERT INTO CloudState (path, is_dir) VALUES (?, ?)")) {
+                            for (String file : files) {
+                                pstmt.setString(1, file);
+                                pstmt.setBoolean(2, false);
+                                pstmt.addBatch();
+                            }
+                            for (String folder : folders) {
+                                pstmt.setString(1, folder);
+                                pstmt.setBoolean(2, true);
+                                pstmt.addBatch();
+                            }
+                            pstmt.executeBatch();
+                        }
+                        globalConn.commit(); 
+                        
+                    } catch (Exception e) { 
+                        System.out.println("❌ DB Write Error: " + e.getMessage()); 
+                        try { globalConn.rollback(); } catch (SQLException ex) {}
+                    } finally {
+                        // 🛡️ GUARANTEED to run, fixing the trapped transaction bug!
+                        try { globalConn.setAutoCommit(true); } catch (SQLException ex) {}
+                    }
+                }
 }

@@ -43,49 +43,62 @@ public class FolderWatcher {
     // ==========================================
     // 📸 THE SNAPSHOT ENGINE
     // ==========================================
-    private static void scanForChanges() {
-        Map<String, Long> currentState = takeSnapshot();
-
-        // 1. Check for NEW or MODIFIED files
-        for (Map.Entry<String, Long> entry : currentState.entrySet()) {
-            String relativePath = entry.getKey();
-            Long currentTimestamp = entry.getValue();
-            Long previousTimestamp = previousState.get(relativePath);
-
-            if (previousTimestamp == null || !previousTimestamp.equals(currentTimestamp)) {
-                // 🛡️ The Shield: Did the server do this?
-                if (maskedEvents.contains(relativePath)) {
-                    System.out.println("🛡️ Event masked (Server download): " + relativePath);
-                    maskedEvents.remove(relativePath);
-                    continue; 
-                }
-
-                File changedFile = syncDirectory.resolve(relativePath).toFile();
-                if (waitForUnlock(changedFile)) {
-                    System.out.println("\n⚡ Detected local change on: " + relativePath);
-                    FileSender.uploadFile(changedFile, relativePath);
+    // ==========================================
+        // 📸 THE SNAPSHOT ENGINE
+        // ==========================================
+        private static void scanForChanges() {
+            Map<String, Long> currentState = takeSnapshot();
+            Set<String> failedLockedFiles = new HashSet<>(); // 👈 Track files we couldn't access
+    
+            // 1. Check for NEW or MODIFIED files
+            for (Map.Entry<String, Long> entry : currentState.entrySet()) {
+                String relativePath = entry.getKey();
+                Long currentTimestamp = entry.getValue();
+                Long previousTimestamp = previousState.get(relativePath);
+    
+                if (previousTimestamp == null || !previousTimestamp.equals(currentTimestamp)) {
+                    // 🛡️ The Shield: Did the server do this?
+                    if (maskedEvents.contains(relativePath)) {
+                        System.out.println("🛡️ Event masked (Server download): " + relativePath);
+                        maskedEvents.remove(relativePath);
+                        continue; 
+                    }
+    
+                    File changedFile = syncDirectory.resolve(relativePath).toFile();
+                    if (waitForUnlock(changedFile)) {
+                        System.out.println("\n⚡ Detected local change on: " + relativePath);
+                        FileSender.uploadFile(changedFile, relativePath);
+                    } else {
+                        // 🚨 THE FIX: Windows still has it locked. Mark it so we forget it!
+                        System.out.println("⏳ File locked by Windows, will retry: " + relativePath);
+                        failedLockedFiles.add(relativePath);
+                    }
                 }
             }
-        }
-
-        // 2. Check for DELETED files
-        for (String oldFilePath : previousState.keySet()) {
-            if (!currentState.containsKey(oldFilePath)) {
-                // 🛡️ The Shield: Did the server tell us to delete this?
-                if (maskedEvents.contains(oldFilePath)) {
-                    System.out.println("🛡️ Event masked (Server delete): " + oldFilePath);
-                    maskedEvents.remove(oldFilePath);
-                    continue;
-                }
-
-                System.out.println("🗑️ Detected local DELETE on: " + oldFilePath);
-                FileSender.deleteFile(oldFilePath);
+    
+            // 🚨 THE FIX: Remove locked files from currentState so we re-detect them next loop!
+            for (String lockedFile : failedLockedFiles) {
+                currentState.remove(lockedFile);
             }
+    
+            // 2. Check for DELETED files
+            for (String oldFilePath : previousState.keySet()) {
+                if (!currentState.containsKey(oldFilePath) && !failedLockedFiles.contains(oldFilePath)) {
+                    // 🛡️ The Shield: Did the server tell us to delete this?
+                    if (maskedEvents.contains(oldFilePath)) {
+                        System.out.println("🛡️ Event masked (Server delete): " + oldFilePath);
+                        maskedEvents.remove(oldFilePath);
+                        continue;
+                    }
+    
+                    System.out.println("🗑️ Detected local DELETE on: " + oldFilePath);
+                    FileSender.deleteFile(oldFilePath);
+                }
+            }
+    
+            // Update the baseline for the next 2-second cycle
+            previousState = currentState;
         }
-
-        // Update the baseline for the next 2-second cycle
-        previousState = currentState;
-    }
 
     // Reads the entire folder tree and returns a map of [File Path -> Last Modified Time]
     private static Map<String, Long> takeSnapshot() {
