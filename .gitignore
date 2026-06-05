@@ -22,7 +22,8 @@ server/users.json
 *package_input/
 # Server build folder
 server/target/
-
+*.out
+server/deploy.sh
 # Generic Java build artifacts
 *.jar
 *.war
