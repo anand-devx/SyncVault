@@ -6,7 +6,7 @@ import javax.swing.JOptionPane;
 
 public class ConfigManager {
     // 🚨 1. Core Variables (Restored SYNC_DIR_PATH)
-    public static String SERVER_URL = "http://localhost:8080";
+    public static String SERVER_URL = "http://ec2-65-0-29-66.ap-south-1.compute.amazonaws.com:8080";
     public static String SYNC_DIR_PATH = System.getProperty("user.home") + File.separator + "SyncVault";
     public static String USERNAME = "";
     public static String PASSWORD = "";
@@ -163,14 +163,22 @@ public class ConfigManager {
                 pathResolved = true; 
             }
         }
-    
+        
         // Resolve the user-specific folder strictly from the Global Base
         Path basePath = Paths.get(SYNC_DIR_PATH);
         Path userFolder = basePath.resolve("SyncVault_" + username);
         SYNC_FOLDER = userFolder.toString();
         
-        DB_URL = "jdbc:sqlite:syncvault_" + username + ".db";
-    
+        // 🚨 THE FIX IS HERE 🚨
+        // Generate a safe, dynamic database path in the user's hidden Windows folder
+        String userHome = System.getProperty("user.home").replace("\\", "/");
+        File appDataDir = new File(userHome + "/.syncvault");
+        if (!appDataDir.exists()) {
+            appDataDir.mkdirs();
+        }
+        DB_URL = "jdbc:sqlite:" + appDataDir.getAbsolutePath().replace("\\", "/") + "/syncvault_" + username + ".db";
+        // -------------------------
+
         File folder = new File(SYNC_FOLDER);
         if (!folder.exists()) {
             folder.mkdirs();

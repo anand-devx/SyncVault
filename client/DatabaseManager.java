@@ -4,7 +4,7 @@ import java.util.Set;
 
 public class DatabaseManager {
 
-    private static final String DB_URL = "jdbc:sqlite:" + System.getProperty("user.home").replace("\\", "/") + "/.syncvault_stealth.db";
+    private static final String DB_URL = ConfigManager.DB_URL;
     private static Connection globalConn;
 
     // 🚨 THE FIX: Added 'synchronized' so Watcher and Heartbeat threads don't crash the DB on startup

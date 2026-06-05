@@ -5,11 +5,13 @@
 client/SyncFolder/
 server/cloud_storage/
 client/secrets.txt
+client/package_input*
 server/syncvault-key.pem
 server/syncvault-instance-key.pem
 server/syncvault-instance-key.pem:Zone.Identifier
 server/syncvault-key.pem:Zone.Identifier
 *Zone.Identifier*
+client/syncvault.properties
 # ==========================================
 # 2. COMPILED JAVA & BUILD FILES
 # ==========================================
