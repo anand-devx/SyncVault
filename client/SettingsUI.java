@@ -1,56 +1,69 @@
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 
 public class SettingsUI {
-    
+
     public static void openWindow() {
-        System.out.println("🖼️ Attempting to draw Settings window..."); // 👈 Added this!
-
-        // Create the window
-        JFrame frame = new JFrame("SyncVault Settings");
-        frame.setSize(450, 200);
-        frame.setLayout(new GridLayout(3, 2, 10, 10));
-        frame.setLocationRelativeTo(null); 
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); 
-        frame.setAlwaysOnTop(true); // 🚀 THE FIX: Force it above all other Windows!
-        // Create the labels and text inputs (pre-filled with current config)
-        JLabel urlLabel = new JLabel("  Server URL (AWS or Local):");
-        JTextField urlField = new JTextField(ConfigManager.SERVER_URL);
-
-        JLabel dirLabel = new JLabel("  Local Sync Folder:");
-        JTextField dirField = new JTextField(ConfigManager.SYNC_DIR_PATH);
-
-        // Create the Save Button
-        JButton saveButton = new JButton("Save Settings");
-        saveButton.setBackground(new Color(0, 120, 215));
-        saveButton.setForeground(Color.WHITE);
+        JFrame frame = new JFrame("SyncVault — Settings");
+        frame.setSize(450, 320);
+        frame.setLocationRelativeTo(null);
         
-        saveButton.addActionListener((ActionEvent e) -> {
-            String newUrl = urlField.getText().trim();
-            String newDir = dirField.getText().trim();
+        // Clean, minimal container with padding
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        panel.setBackground(Color.WHITE);
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
 
-            if (newUrl.isEmpty() || newDir.isEmpty()) {
-                JOptionPane.showMessageDialog(frame, "Fields cannot be empty!", "Error", JOptionPane.ERROR_MESSAGE);
-                return;
+        // UI Components - Load the strictly saved global path
+        JTextField pathField = new JTextField(ConfigManager.SYNC_DIR_PATH, 20);
+        JButton browseBtn = new JButton("Browse");
+        JCheckBox autoStart = new JCheckBox("Launch on system startup", true);
+        JButton saveBtn = new JButton("Save & Apply");
+
+        // Layout
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("Global PC Sync Path:"), gbc);
+        
+        gbc.gridy = 1;
+        panel.add(pathField, gbc);
+        
+        gbc.gridx = 1;
+        panel.add(browseBtn, gbc);
+        
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        panel.add(autoStart, gbc);
+        
+        gbc.gridy = 3;
+        panel.add(saveBtn, gbc);
+
+        // Actions
+        browseBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            if (chooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
+                pathField.setText(chooser.getSelectedFile().getAbsolutePath());
             }
-
-            // Hand the new data to the ConfigManager!
-            ConfigManager.saveSettings(newUrl, newDir);
-
-            JOptionPane.showMessageDialog(frame, "Settings saved! Please exit the app from the System Tray and restart it to apply the new folder.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            frame.dispose(); 
         });
 
-        // Add everything to the window
-        frame.add(urlLabel);
-        frame.add(urlField);
-        frame.add(dirLabel);
-        frame.add(dirField);
-        frame.add(new JLabel("")); // Empty spacer to push button to the right
-        frame.add(saveButton);
+        saveBtn.addActionListener(e -> {
+            // Update the global path (this triggers the GUI fallback check if invalid!)
+            ConfigManager.updateSyncFolder(pathField.getText());
+            
+            FolderWatcher.stopWatching();
+            
+            // Only start watching if the user didn't click "Don't Sync" during validation
+            if (!ConfigManager.SYNC_DISABLED) {
+                FolderWatcher.startWatching();
+            }
+            
+            frame.dispose();
+        });
 
-        // Make it visible!
+        frame.add(panel);
         frame.setVisible(true);
     }
 }

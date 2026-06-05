@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FolderWatcher {
     private static Path syncDirectory;
+    private static volatile boolean running = false;
     
     // 🧠 THE MEMORY BANKS
     private static final Set<String> maskedEvents = ConcurrentHashMap.newKeySet(); // Stops Two-Way Sync loops
@@ -19,26 +20,35 @@ public class FolderWatcher {
         maskedEvents.add(relativePath.replace("\\", "/"));
     }
 
-    public static void startWatching() {
-        syncDirectory = Paths.get(ConfigManager.SYNC_DIR_PATH);
-
-        try {
-            Files.createDirectories(syncDirectory);
-            System.out.println("👀 SyncVault Daemon active (Lock-Free Polling Mode).");
-            System.out.println("📂 Watching folder & sub-folders: " + syncDirectory.toAbsolutePath());
-
-            // Take the initial baseline snapshot so we don't upload everything on boot
-            previousState = takeSnapshot();
-
-            // The Lock-Free Polling Loop
-            while (true) {
-                Thread.sleep(2000); // Check every 2 seconds
-                scanForChanges();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    public static void stopWatching() {
+            System.out.println("🛑 Stopping FolderWatcher...");
+            running = false; 
         }
-    }
+    
+        public static void startWatching() {
+            // If it's already running, stop it first before starting a new one
+            if (running) stopWatching(); 
+            
+            running = true; // Set the flag to true
+            syncDirectory = Paths.get(ConfigManager.SYNC_FOLDER);
+    
+            new Thread(() -> {
+                try {
+                    Files.createDirectories(syncDirectory);
+                    previousState = takeSnapshot();
+                    System.out.println("📂 Watching folder: " + syncDirectory.toAbsolutePath());
+    
+                    // 🚨 Use the 'running' flag in the loop
+                    while (running) { 
+                        Thread.sleep(2000);
+                        scanForChanges();
+                    }
+                    System.out.println("✅ FolderWatcher stopped successfully.");
+                } catch (Exception e) {
+                    if (running) e.printStackTrace();
+                }
+            }).start();
+        }
 
     // ==========================================
     // 📸 THE SNAPSHOT ENGINE
@@ -129,6 +139,7 @@ public class FolderWatcher {
                 raf.close();
                 return true; 
             } catch (Exception e) {
+                e.printStackTrace();
                 try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             }
         }

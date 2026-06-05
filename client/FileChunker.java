@@ -33,16 +33,18 @@ public class FileChunker {
                 while ((bytesRead = bis.read(buffer)) > 0) {
                     // Hash only the exact bytes read (prevents padding bugs on the final chunk)
                     digest.update(buffer, 0, bytesRead);
-                    byte[] hashBytes = digest.digest();
+                    byte[] hashBytes = digest.digest(); // Automatically resets for the next chunk!
                     
                     String hexHash = bytesToHex(hashBytes);
                     chunkHashes.add(hexHash);
                     
+                    // Optional: Comment this out in production so it doesn't spam your UI logs
                     System.out.println("   📦 [Chunk " + chunkIndex + "] Size: " + (bytesRead/1024) + "KB | Hash: " + hexHash.substring(0, 16) + "...");
                     chunkIndex++;
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
             System.err.println("❌ Hashing Error on file " + filePath + ": " + e.getMessage());
         }
 
