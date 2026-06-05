@@ -5,7 +5,7 @@ SyncVault is a self-hosted, full-stack cloud synchronization platform. It featur
 ## ✨ Features
 * **Real-Time Synchronization:** Automatically detects file changes locally and syncs them to your private cloud storage.
 * **Chunked Uploads:** Bypasses standard HTTP request size limits by splitting large files into chunks for reliable AWS S3 delivery.
-* **Native Windows Integration:** Runs seamlessly in the background with a modern System Tray menu and a native `.msi` Windows installer.
+* **Native Windows Integration:** Runs seamlessly in the background with a modern System Tray menu and a native `.exe` Windows installer.
 * **Secure Multi-User Architecture:** Supports multiple accounts on the same PC by isolating local file states using dynamic SQLite databases stored safely in the user's home directory.
 * **JWT Authentication:** Stateless, secure API communication with token persistence.
 * **Resilient Connection:** Built-in heartbeat monitor that handles server downtime and auto-reconnects without spamming logs.
@@ -20,7 +20,7 @@ SyncVault is a self-hosted, full-stack cloud synchronization platform. It featur
 **Frontend (Desktop Client)**
 * Java (AWT / Swing for UI)
 * SQLite (Local sync state management)
-* `jpackage` & WiX Toolset (Native Windows `.msi` bundling)
+* `jpackage` & WiX Toolset (Native Windows `.exe` bundling)
 
 ---
 
@@ -65,22 +65,22 @@ nohup java -jar target/server-0.0.1-SNAPSHOT.jar > server.log 2>&1 &
 
 ## 💻 Client Installation & Build
 
-The client is bundled into a native Windows Installer (`.msi`) so users don't need to mess with `.jar` files or terminals.
+The client is bundled into a native Windows Installer (`.exe`) so users don't need to mess with `.jar` files or terminals.
 
 ### 1. Build the Client Jar
 Compile your client code and ensure `sqlite-jdbc.jar` is included in your classpath.
 
 ### 2. Create the Windows Installer
-Use the `jpackage` tool (requires WiX toolset installed on your Windows machine) to generate the MSI. 
+Use the `jpackage` tool (requires WiX toolset installed on your Windows machine) to generate the exe. 
 Run this command from your build directory:
 
 ```cmd
-jpackage --type msi --dest output_installers --input package_input --name SyncVault --main-jar SyncVaultClient.jar --main-class SyncDaemon --win-dir-chooser --win-shortcut --win-menu --add-modules java.sql,java.naming,java.desktop,jdk.unsupported --app-version 1.0
+jpackage --type exe --dest output_installers --input package_input --name SyncVault --main-jar SyncVaultClient.jar --main-class SyncDaemon --win-dir-chooser --win-shortcut --win-menu --add-modules java.sql,java.naming,java.desktop,jdk.unsupported --app-version 1.0
 ```
 *Note: The `--add-modules java.sql` flag is strictly required to prevent the bundled JRE from stripping out the SQLite database drivers.*
 
 ### 3. Usage
-1. Install the resulting `SyncVault-1.0.msi`.
+1. Install the resulting `SyncVault-1.0.exe`.
 2. Launch the app from the Start Menu.
 3. Right-click the SyncVault icon in your System Tray and select **Settings** to configure your server URL.
 4. Log in, select your sync folder, and your files will begin syncing immediately!
