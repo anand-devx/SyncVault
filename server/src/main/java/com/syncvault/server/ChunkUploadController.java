@@ -45,8 +45,8 @@ public class ChunkUploadController {
     private String jwtSecret;
 
     // Universal platform-safe scratch folders
-    private static final String STAGING_DIR = System.getProperty("java.io.tmpdir") + "/syncvault_staging";
-    private static final String TEMP_DIR = System.getProperty("java.io.tmpdir") + "/syncvault_chunks";
+    private static final String STAGING_DIR = "cloud_storage/staging";
+    private static final String TEMP_DIR = System.getProperty("user.home") + "/syncvault_chunks";
 
     // Helper method to extract identity from token securely
     private String getUsernameFromToken(String authHeader) {
