@@ -6,7 +6,7 @@ import javax.swing.JOptionPane;
 
 public class ConfigManager {
     // 🚨 1. Core Variables (Restored SYNC_DIR_PATH)
-    public static String SERVER_URL = "http://ec2-65-0-29-66.ap-south-1.compute.amazonaws.com:8080";
+    public static String SERVER_URL = "http://ec2-15-206-159-122.ap-south-1.compute.amazonaws.com:8080";
     public static String SYNC_DIR_PATH = System.getProperty("user.home") + File.separator + "SyncVault";
     public static String USERNAME = "";
     public static String PASSWORD = "";
@@ -199,13 +199,4 @@ public class ConfigManager {
         saveToFile();
     }
     
-    public static void saveConfig() {
-        Properties props = new Properties();
-        props.setProperty("sync.path", SYNC_FOLDER);
-    }
-    
-    public static void loadConfig() {
-        Properties props = new Properties(); 
-        SYNC_FOLDER = props.getProperty("sync.path", "C:\\SyncVault\\Default");
-    }
 }
