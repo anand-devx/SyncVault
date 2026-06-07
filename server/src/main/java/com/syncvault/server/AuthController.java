@@ -10,13 +10,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 
-@RestController // 🚨 FIX: Tells Spring Boot this class handles API requests
+@RestController
 public class AuthController {
 
     @Autowired
     private UserService userService;
 
-    // 🚨 FIX: Actually pulls the secret key from your application.properties!
     @Value("${syncvault.jwt.secret}")
     private String jwtSecret;
 
@@ -44,9 +43,13 @@ public class AuthController {
             if (!userService.validate(username, password))
                 return ResponseEntity.status(401).body("Invalid credentials.");
 
+            // 🚨 FIX: Set expiration to 10 years (in milliseconds)
+            // 1000L * 60s * 60m * 24h * 365d * 10y
+            long tenYearsInMillis = 1000L * 60 * 60 * 24 * 365 * 10;
+
             String token = Jwts.builder()
                 .setSubject(username)
-                .setExpiration(new Date(System.currentTimeMillis() + 86400000)) // 24 hours
+                .setExpiration(new Date(System.currentTimeMillis() + tenYearsInMillis)) 
                 .signWith(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
                 .compact();
 

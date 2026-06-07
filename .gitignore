@@ -11,7 +11,7 @@ server/syncvault-instance-key.pem
 server/syncvault-instance-key.pem:Zone.Identifier
 server/syncvault-key.pem:Zone.Identifier
 *Zone.Identifier*
-client/syncvault.properties
+*syncvault.properties*
 server/users.json
 # ==========================================
 # 2. COMPILED JAVA & BUILD FILES
