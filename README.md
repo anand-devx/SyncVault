@@ -12,7 +12,7 @@ SyncVault is a self-hosted, full-stack cloud synchronization platform. It featur
 
 ## 🛠️ Tech Stack
 **Backend (Server)**
-* Java 17+
+* Java 21
 * Spring Boot 3 (Web, Security)
 * AWS SDK (S3 integration)
 * JSON Web Tokens (JWT) for Authentication
