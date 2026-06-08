@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/sync")
@@ -227,6 +228,26 @@ public class ChunkUploadController {
     // ==========================================
     // ⬇️ 5. USER ISOLATED STREAM DOWNLOAD
     // ==========================================
+    @PostMapping("/delete-batch")
+    public ResponseEntity<String> deleteBatch(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody List<String> filenames) { // 👈 Accepts a list of files
+        try {
+            String username = getUsernameFromToken(authHeader);
+            
+            // 1. Convert filenames to S3 Keys
+            List<String> s3Keys = filenames.stream()
+                    .map(f -> username + "/" + f) 
+                    .collect(java.util.stream.Collectors.toList());
+    
+            // 2. ⚡ BULK DELETE: You must update your S3Service to handle this!
+            s3Service.deleteFilesBulk(s3Keys);
+            
+            return ResponseEntity.ok("Batch deleted successfully.");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Batch delete failed.");
+        }
+    }
     @GetMapping("/download")
     public ResponseEntity<InputStreamResource> downloadFile(
             @RequestHeader("Authorization") String authHeader,

@@ -1,15 +1,20 @@
+// import java.net.HttpURLConnection;
+// import java.net.URI;
+// import java.nio.file.*;
+import java.util.*;
+import java.util.List;
+import java.util.stream.Stream;
+import java.util.stream.Collectors;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.net.URI;
 import java.net.HttpURLConnection;
-import java.util.Scanner;
-import java.util.Set;
-import java.util.HashSet;
 import java.nio.file.*;
 import javax.swing.SwingUtilities;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import javax.swing.UIManager;
+import java.io.File;
 // import com.formdev.flatlaf.FlatDarkLaf;
 
 public class SyncDaemon {
@@ -123,26 +128,21 @@ public class SyncDaemon {
     // ==========================================
     // 🫀 THE HEARTBEAT (Cloud -> PC)
     // ==========================================
-    public static void syncFromServer() {
-        if (ConfigManager.AUTH_TOKEN == null || ConfigManager.SYNC_FOLDER == null) {
-                return; 
-            }
-        
+    
+        public static void syncFromServer() {
+            if (ConfigManager.AUTH_TOKEN == null || ConfigManager.SYNC_FOLDER == null) return;
+    
             String serverListUrl = ConfigManager.SERVER_URL + "/api/sync/list";
             Path syncDir = Paths.get(ConfigManager.SYNC_FOLDER);
-        
+    
             try {
+                // 1. Fetch from Cloud
                 HttpURLConnection conn = (HttpURLConnection) URI.create(serverListUrl).toURL().openConnection();
                 conn.setRequestMethod("GET");
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(30000);
                 conn.setRequestProperty("Authorization", "Bearer " + ConfigManager.AUTH_TOKEN);
                 
-                if (conn.getResponseCode() != 200) {
-                    System.out.println("⚠️ Heartbeat failed: Server returned Code " + conn.getResponseCode());
-                    return;
-                }
-        
+                if (conn.getResponseCode() != 200) return;
+    
                 Set<String> cloudFiles = new HashSet<>();
                 try (Scanner scanner = new Scanner(conn.getInputStream())) {
                     while (scanner.hasNextLine()) {
@@ -150,83 +150,83 @@ public class SyncDaemon {
                         if (!file.isEmpty()) cloudFiles.add(file);
                     }
                 }
-
-            // 1. 🏗️ Build "Implicit Folders" from the raw S3 file paths
-            Set<String> currentCloudFolders = new HashSet<>();
-            for (String file : cloudFiles) {
-                String[] parts = file.split("/");
-                String folderPath = "";
-                for (int i = 0; i < parts.length - 1; i++) {
-                    folderPath += (i == 0 ? "" : "/") + parts[i];
-                    currentCloudFolders.add(folderPath);
-                }
-            }
-
-            // 2. 🧠 Fetch the memory of the Cloud from 10 seconds ago
-            Set<String> lastKnownFolders = DatabaseManager.getLastKnownFolders();
-            Set<String> lastKnownFiles = DatabaseManager.getLastKnownFiles(); 
-
-            // 3. 🔎 The True Diff: Find what the cloud user deleted (Folders)
-            for (String oldFolder : lastKnownFolders) {
-                if (!currentCloudFolders.contains(oldFolder)) {
-                    Path localDirPath = syncDir.resolve(oldFolder);
-                    if (Files.exists(localDirPath)) {
-                        try {
-                            if (Files.list(localDirPath).findFirst().isEmpty()) {
-                                Files.delete(localDirPath);
-                                System.out.println("🧹 Cloud folder deletion synced to local: " + oldFolder);
-                            }
-                        } catch (Exception e) {}
+    
+                Set<String> currentCloudFolders = new HashSet<>();
+                for (String file : cloudFiles) {
+                    String[] parts = file.split("/");
+                    String folderPath = "";
+                    for (int i = 0; i < parts.length - 1; i++) {
+                        folderPath += (i == 0 ? "" : "/") + parts[i];
+                        currentCloudFolders.add(folderPath);
                     }
                 }
-            }
-
-            System.out.println("🫀 Heartbeat check... Cloud has " + cloudFiles.size() + " files.");
-
-            // 4. ⬇️ Download new files from cloud
-            for (String cloudFile : cloudFiles) {
-                if (cloudFile.contains("Zone.Identifier") || cloudFile.contains(":")) continue;
-            
-                Path localPath = syncDir.resolve(cloudFile);
-                if (!Files.exists(localPath)) {
-                    // 🚨 CRITICAL CHANGE: Even if it's not in the database, 
-                    // if it's on the cloud, we MUST download it.
-                    System.out.println("⬇️ Downloading missing cloud file: " + cloudFile);
-                    
-                    // Mask the event so the watcher doesn't try to upload it right back
-                    FolderWatcher.maskEvent(cloudFile); 
-                    
-                    FileReceiver.downloadFileFromServer(cloudFile);
-                }
-            }
-
-            // 5. 🗑️ Execute Standard File Deletion
-            if (Files.exists(syncDir)) {
-                try (java.util.stream.Stream<Path> stream = Files.walk(syncDir)) {
-                    stream.filter(Files::isRegularFile).forEach(localFile -> {
-                        String relative = syncDir.relativize(localFile).toString().replace("\\", "/");
-                        if (relative.endsWith(".tmp") || relative.startsWith("~") || relative.contains("Zone.Identifier")) return;
-
-                        if (!cloudFiles.contains(relative)) {
-                            if (lastKnownFiles.contains(relative)) {
-                                System.out.println("🔎 Heartbeat noticed cloud deleted: " + relative);
-                                FileReceiver.deleteFileLocally(relative);
-                            }
-                        }
-                    });
-                } 
-            }
-
-            // 6. 💾 Save the new reality to the database and update Tooltip
-            DatabaseManager.updateCloudState(cloudFiles, currentCloudFolders);
-            updateSyncTime(); // 👈 Updates tray hover text on every successful heartbeat
-            
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("❌ Heartbeat Network Error: " + e.getMessage());
-        }
-    }
     
+                // 2. Fetch DB Memory
+                Set<String> lastKnownFolders = DatabaseManager.getLastKnownFolders();
+                Set<String> lastKnownFiles = DatabaseManager.getLastKnownFiles(); 
+    
+                // 3. Diff Folders (Wrapped in try-catch)
+                for (String oldFolder : lastKnownFolders) {
+                    if (!currentCloudFolders.contains(oldFolder)) {
+                        Path localDirPath = syncDir.resolve(oldFolder);
+                        if (Files.exists(localDirPath)) {
+                            try {
+                                if (Files.list(localDirPath).findFirst().isEmpty()) {
+                                    Files.delete(localDirPath);
+                                }
+                            } catch (Exception e) { /* Ignore folder lock */ }
+                        }
+                    }
+                }
+                System.out.println("🫀 Heartbeat check... Cloud has " + cloudFiles.size() + " files.");
+                // 4. Download Loop
+                for (String cloudFile : cloudFiles) {
+                    try {
+                        if (cloudFile.contains("Zone.Identifier")) continue;
+                        
+                        if (DatabaseManager.isMarkedDeleted(cloudFile)) continue;
+                    
+                        Path localPath = syncDir.resolve(cloudFile);
+                        if (!Files.exists(localPath)) {
+                            FolderWatcher.maskEvent(cloudFile); 
+                            FileReceiver.downloadFileFromServer(cloudFile);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("⚠️ Error downloading " + cloudFile + ": " + e.getMessage());
+                    }
+                }
+    
+                // 5. 🚨 THE FIX: Bulletproof Local Deletion Loop
+                if (Files.exists(syncDir)) {
+                    List<Path> localFiles = new ArrayList<>();
+                    try (Stream<Path> stream = Files.walk(syncDir)) {
+                        localFiles = stream.filter(Files::isRegularFile).collect(Collectors.toList());
+                    } catch (Exception e) { e.printStackTrace(); }
+    
+                    for (Path localFile : localFiles) {
+                        try {
+                            String relative = syncDir.relativize(localFile).toString().replace("\\", "/");
+                            if (relative.endsWith(".tmp") || relative.startsWith("~") || relative.contains("Zone.Identifier")) continue;
+    
+                            // If it's NOT in the cloud, but our DB remembers it used to be there:
+                            if (!cloudFiles.contains(relative) && lastKnownFiles.contains(relative)) {
+                                System.out.println("🔎 Heartbeat noticed cloud deleted: " + relative);
+                                FileReceiver.deleteFileLocally(relative); // Uses the safe retry method
+                            }
+                        } catch (Exception e) {
+                            System.err.println("⚠️ Loop error protecting Daemon crash: " + e.getMessage());
+                        }
+                    }
+                }
+    
+                // 6. Save State (This will NOW ALWAYS RUN because the loop cannot crash)
+                DatabaseManager.updateCloudState(cloudFiles, currentCloudFolders);
+                updateSyncTime();
+                
+            } catch (Exception e) {
+                System.err.println("❌ Heartbeat Network Error: " + e.getMessage());
+            }
+        }
     // Allow the UI to cleanly unhook the tray icon on logout
     public static void removeTrayIcon() {
         if (trayIcon != null && SystemTray.isSupported()) {

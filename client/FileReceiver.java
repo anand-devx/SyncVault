@@ -6,7 +6,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
+import java.io.IOException;
+import java.nio.file.FileSystemException;
 public class FileReceiver {
     private static final Path syncDirectory = Paths.get(ConfigManager.SYNC_FOLDER);
     private static final String BASE_URL = ConfigManager.SERVER_URL + "/api/sync/download?filename=";
@@ -59,44 +60,27 @@ public class FileReceiver {
     // ==========================================
         // ☁️🗑️ SERVER COMMAND: Delete Local File 
         // ==========================================
-        public static void deleteFileLocally(String relativePath) {
-            try {
-                Path targetPath = syncDirectory.resolve(relativePath);
-                if (Files.exists(targetPath)) {
-                    // 1. Tell the Watcher to look away
-                    FolderWatcher.maskEvent(relativePath);
-    
-                    // 2. Delete the file off the hard drive
-                    Files.delete(targetPath);
-                    System.out.println("🗑️ Real-time Mirror: Deleted local file -> " + relativePath);
-    
-                    // 3. 🎯 TARGETED CLEANUP: Only check the exact folder we just emptied!
-                    Path parentDir = targetPath.getParent();
-                    
-                    // Keep moving up the folder tree until we hit the root SyncFolder
-                    while (parentDir != null && !parentDir.toAbsolutePath().equals(syncDirectory.toAbsolutePath())) {
-                        
-                        // Safely check if the folder is empty without leaking memory
-                        try (java.util.stream.Stream<Path> stream = Files.list(parentDir)) {
-                            if (stream.findAny().isPresent()) {
-                                break; // Folder has other stuff in it. Stop checking!
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            break; // Folder is locked by Windows, stop checking!
+        public static boolean deleteFileLocally(String relativePath) {
+                Path path = Paths.get(ConfigManager.SYNC_FOLDER, relativePath);
+                int maxRetries = 5;
+                
+                for (int i = 0; i < maxRetries; i++) {
+                    try {
+                        boolean deleted = Files.deleteIfExists(path);
+                        if (deleted) {
+                            System.out.println("✅ Successfully deleted local file: " + relativePath);
                         }
-    
-                        // If we made it here, the folder is completely empty. Delete it!
-                        Files.delete(parentDir);
-                        System.out.println("🧹 Cleaned up empty synced folder -> " + parentDir.getFileName());
-                        
-                        // Move up to check the grandparent folder!
-                        parentDir = parentDir.getParent();
+                        return true; // Success or file didn't exist anyway
+                    } catch (FileSystemException e) {
+                        // Windows has a lock on the file. Wait 200ms and try again.
+                        try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+                    } catch (IOException e) {
+                        System.err.println("❌ Fatal IO Error deleting " + relativePath + ": " + e.getMessage());
+                        return false;
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println("❌ Error executing local sync delete: " + e.getMessage());
-            }
+                
+                System.err.println("⏳ Gave up deleting (File locked by Windows): " + relativePath);
+                return false; // Failed to delete, but DID NOT crash the app!
         }
 }

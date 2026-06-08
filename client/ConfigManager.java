@@ -176,7 +176,11 @@ public class ConfigManager {
         if (!appDataDir.exists()) {
             appDataDir.mkdirs();
         }
-        DB_URL = "jdbc:sqlite:" + appDataDir.getAbsolutePath().replace("\\", "/") + "/syncvault_" + username + ".db";
+        // BEFORE: DB_URL = "jdbc:sqlite:" + appDataDir.getAbsolutePath().replace("\\", "/") + "/syncvault_" + username + ".db";
+        
+        // AFTER: Point it to your home directory explicitly
+        // String userHome = System.getProperty("user.home");
+        DB_URL = "jdbc:sqlite:" + userHome + "/.syncvault/syncvault_" + username + ".db";
         // -------------------------
 
         File folder = new File(SYNC_FOLDER);

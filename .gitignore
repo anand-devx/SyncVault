@@ -5,6 +5,8 @@
 client/SyncFolder/
 server/cloud_storage/
 client/secrets.txt
+client/bin/
+client/cp.txt
 client/package_input*
 server/syncvault-key.pem
 server/syncvault-instance-key.pem
@@ -22,6 +24,7 @@ server/users.json
 *package_input/
 # Server build folder
 server/target/
+client/target/
 *.out
 server/deploy.sh
 # Generic Java build artifacts
