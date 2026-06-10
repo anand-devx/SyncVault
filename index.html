@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncVault | Cloud Sync Daemon</title>
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030712;
+            --surface-color: #0b1329;
+            --surface-card: #111827;
+            --border-color: #1f2937;
+            --border-hover: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-color: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.15);
+            --accent-hover: #60a5fa;
+            --danger-color: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 50% -20%, var(--accent-glow), transparent 45%),
+                radial-gradient(circle at 100% 60%, rgba(99, 102, 241, 0.05), transparent 30%);
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+        /* Modern Glassmorphic Navigation */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            backdrop-filter: blur(12px);
+            z-index: 100;
+        }
+        
+        /* Fixed Logo Class */
+        .logo { 
+            font-size: 1.25rem; 
+            font-weight: 700; 
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        .logo span { color: var(--accent-color); }
+        
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s, border-color 0.2s;
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.02);
+        }
+        .nav-links a:hover { 
+            color: var(--text-primary); 
+            border-color: var(--border-hover);
+        }
+
+        /* Hero Section */
+        .hero { text-align: center; padding: 120px 0 80px; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent-hover);
+            margin-bottom: 24px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .hero h1 { 
+            font-size: 3.5rem; 
+            margin-bottom: 24px; 
+            letter-spacing: -1.5px; 
+            font-weight: 700;
+            line-height: 1.15;
+            background: linear-gradient(180deg, #fff 0%, #9ca3af 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 620px;
+            margin: 0 auto 40px;
+        }
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            align-items: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--text-primary);
+            color: var(--bg-color);
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: transform 0.2s, filter 0.2s;
+        }
+        .btn:hover { 
+            transform: translateY(-1px);
+            filter: brightness(0.9);
+        }
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        .btn-outline:hover { 
+            background-color: rgba(255, 255, 255, 0.03);
+            border-color: var(--border-hover);
+            filter: none;
+        }
+
+        /* Video Showcase Wrap */
+        .showcase {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 12px;
+            margin-bottom: 80px;
+            box-shadow: 0 30px 60px -15px rgba(0,0,0,0.8);
+            position: relative;
+        }
+        .showcase::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px; right: -1px; bottom: -1px;
+            border-radius: 16px;
+            background: linear-gradient(45deg, var(--border-color), transparent, var(--border-color));
+            z-index: -1;
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 10px;
+            background: #000;
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+
+        /* Section Titles */
+        .section-title { 
+            text-align: center; 
+            margin-bottom: 16px; 
+            font-size: 2.25rem; 
+            letter-spacing: -0.5px;
+        }
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+            font-size: 1rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Generic Code Tag */
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255,255,255,0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--accent-hover);
+        }
+
+        /* Grid Cards */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 100px;
+        }
+        .card {
+            background-color: var(--surface-card);
+            padding: 32px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.3s, transform 0.3s;
+        }
+        .card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+        .card-icon { font-size: 1.5rem; margin-bottom: 16px; display: inline-block; }
+        .card h3 { color: var(--text-primary); margin-bottom: 12px; font-size: 1.2rem; font-weight: 600; }
+        .card p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; }
+        
+        .problem-card h3 { color: var(--danger-color); }
+        .problem-card code { color: var(--danger-color); background: var(--danger-bg); }
+
+        /* Topology Table */
+        .topology-wrapper {
+            background: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 100px;
+        }
+        .topology-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        .topology-table th, .topology-table td {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .topology-table th {
+            background: rgba(255,255,255,0.02);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .topology-table tr:last-child td { border-bottom: none; }
+        .topology-table td { font-size: 0.95rem; }
+        .thread-name { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-primary); }
+
+        /* Lifecycle Steps */
+        .lifecycle {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-bottom: 100px;
+        }
+        .step {
+            display: flex;
+            gap: 24px;
+            background: var(--surface-card);
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            border-radius: 12px;
+            align-items: center;
+        }
+        .step-number {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            background: var(--accent-glow);
+            color: var(--accent-hover);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .step-content h4 { margin-bottom: 8px; font-size: 1.1rem; }
+        .step-content p { color: var(--text-secondary); font-size: 0.95rem; }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 48px 0;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            letter-spacing: 0.3px;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .cta-group { flex-direction: column; width: 100%; }
+            .btn { width: 100%; }
+            .topology-table, .topology-table tbody, .topology-table tr, .topology-table th, .topology-table td {
+                display: block;
+            }
+            .topology-table th { display: none; }
+            .topology-table tr { border-bottom: 1px solid var(--border-color); }
+            .step { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <nav>
+            <div class="logo">📦&nbsp;Sync<span>Vault</span></div>
+            <div class="nav-links">
+                <a href="https://github.com/anand-devx/SyncVault" target="_blank">GitHub Repository</a>
+            </div>
+        </nav>
+
+        <section class="hero">
+            <div class="badge">Windows Background Daemon</div>
+            <h1>Resilient Cloud Synchronization.</h1>
+            <p>A high-performance multithreaded daemon engineered to systematically handle OS-level file locks, volatile memory faults, and local state recovery.</p>
+            <div class="cta-group">
+                <a href="https://github.com/anand-devx/SyncVault/releases" class="btn">Download Daemon (.exe)</a>
+                <a href="#demo" class="btn btn-outline">Watch Demo Walkthrough</a>
+            </div>
+        </section>
+
+        <section id="demo" class="showcase">
+            <div class="video-container">
+                <iframe 
+                    src="https://www.youtube-nocookie.com/embed/mneZNZqm8EU?autoplay=1&mute=1&loop=1" 
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+        </section>
+
+        <h2 class="section-title">The Engineering Challenge</h2>
+        <p class="section-subtitle">Naively copying files to the cloud fails instantly on Windows. SyncVault was built to bypass the two biggest hurdles in daemon-based synchronization.</p>
+        
+        <section class="grid">
+            <div class="card problem-card">
+                <span class="card-icon">🔒</span>
+                <h3>The Win32 File Lock Problem</h3>
+                <p>When an application writes to a file, the Windows OS places an exclusive lock on it. Standard sync scripts crash with a <code>filesystem_error</code> when encountering these. SyncVault implements a retry-backoff queue that gracefully polls file handles until the OS safely releases them.</p>
+            </div>
+            <div class="card problem-card">
+                <span class="card-icon">🧠</span>
+                <h3>The Memory Drift Problem</h3>
+                <p>If a sync engine tracks file states solely in a RAM vector, closing the app or a sudden power loss wipes that state clean—causing cloud data desyncs on reboot. By offloading tracker state entirely to SQLite, SyncVault guarantees zero structural drift across restarts.</p>
+            </div>
+        </section>
+
+        <h2 class="section-title">Core Architecture</h2>
+        <p class="section-subtitle">Under the hood details on how reliability is maintained under state failure.</p>
+        
+        <section class="grid">
+            <div class="card">
+                <span class="card-icon">🗄️</span>
+                <h3>Relational State Management</h3>
+                <p>SyncVault commits system file metrics (<code>isDir</code>, <code>isDeleted</code>, <code>path</code>) into a transaction-safe embedded <strong>SQLite</strong> database. This tombstoning methodology isolates local delete steps to protect cloud mirrors from data drift.</p>
+            </div>
+            <div class="card">
+                <span class="card-icon">🛡️</span>
+                <h3>Fault Tolerance & Recovery</h3>
+                <p>Designed for chaos. If a crash compromises the database file, the daemon detects the corruption signature instantly, initializes an emergency filesystem trace, and reconciles structural trees directly from cloud manifests.</p>
+            </div>
+            <div class="card">
+                <span class="card-icon">⚙️</span>
+                <h3>Dynamic Configuration</h3>
+                <p>Zero downtime updates. Target storage reallocations adjust runtime targets without interrupting active multi-threaded synchronization queues. Updates propagate via thread-safe memory hooks, eliminating process teardowns.</p>
+            </div>
+        </section>
+
+        <h2 class="section-title">Multithreaded Topology</h2>
+        <p class="section-subtitle">How concurrent processes execute without blocking the user's operating system.</p>
+
+        <div class="topology-wrapper">
+            <table class="topology-table">
+                <thead>
+                    <tr>
+                        <th>Thread Component</th>
+                        <th>Core Responsibility</th>
+                        <th>Coordination Mechanism</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="thread-name">Main Daemon Thread</td>
+                        <td>Initializes the background service, reads JSON configurations, and monitors overall system health.</td>
+                        <td>Spawns and manages the lifecycle of worker sub-processes.</td>
+                    </tr>
+                    <tr>
+                        <td class="thread-name">FS Watcher Thread</td>
+                        <td>Listens natively to directory change notifications via the Windows kernel (avoiding heavy CPU polling).</td>
+                        <td>Pushes altered file paths into a <code>std::queue</code> protected by mutexes.</td>
+                    </tr>
+                    <tr>
+                        <td class="thread-name">Sync Worker Pool</td>
+                        <td>Picks up tasks from the queue, checks SQLite DB states, resolves file locks, and executes cloud uploads.</td>
+                        <td>Utilizes <code>std::condition_variable</code> to sleep when idle, preventing CPU spinning.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2 class="section-title">The Data Lifecycle</h2>
+        <p class="section-subtitle">Tracing the path of a deleted file from local disk to the cloud.</p>
+
+        <section class="lifecycle">
+            <div class="step">
+                <div class="step-number">01</div>
+                <div class="step-content">
+                    <h4>Kernel Detection</h4>
+                    <p>The user deletes a local file. The Windows Kernel flags a filesystem event. The FS Watcher Thread catches this event and pushes the file path into the thread-safe Task Queue.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">02</div>
+                <div class="step-content">
+                    <h4>SQLite Tombstoning</h4>
+                    <p>A Sync Worker wakes up, pulls the task, and updates the local SQLite database. Instead of dropping the row, it flips <code>IsDeleted = 1</code>. This ensures a persistent record of the action exists even if the system crashes immediately after.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">03</div>
+                <div class="step-content">
+                    <h4>Cloud Reconciliation</h4>
+                    <p>The Sync Worker securely connects to the remote cloud API, matches the file hash or ID, and executes the remote deletion request.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">04</div>
+                <div class="step-content">
+                    <h4>State Pruning</h4>
+                    <p>Upon receiving an HTTP 200 OK from the cloud, the worker permanently removes the tombstoned row from the SQLite database, completing the synchronization cycle seamlessly.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Engineered by Anand Yadav | Built specifically for Windows Architectures</p>
+        </footer>
+    </div>
+
+</body>
+</html>
