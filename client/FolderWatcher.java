@@ -128,11 +128,39 @@ public class FolderWatcher {
     private static Map<String, Long> takeSnapshot() {
         Map<String, Long> state = new HashMap<>();
         if (!Files.exists(syncDirectory)) return state;
-
+    
         try (java.util.stream.Stream<Path> stream = Files.walk(syncDirectory)) {
             stream.filter(Files::isRegularFile).forEach(path -> {
                 String relativePath = syncDirectory.relativize(path).toString().replace("\\", "/");
-                if (relativePath.endsWith(".tmp") || relativePath.startsWith("~") || relativePath.contains("Zone.Identifier")) return;
+                String fileName = path.getFileName().toString().toLowerCase();
+    
+                // 1. OS System Bloat (Windows & macOS)
+                if (fileName.equals("desktop.ini") || 
+                    fileName.equals("thumbs.db") || 
+                    fileName.equals(".ds_store")) {
+                    return;
+                }
+    
+                // 2. In-Progress Downloads & Temp Files
+                if (fileName.endsWith(".tmp") || 
+                    fileName.endsWith(".crdownload") || // Chrome downloading
+                    fileName.endsWith(".part") ||       // Firefox downloading
+                    fileName.endsWith(".download")) {   // Safari downloading
+                    return;
+                }
+    
+                // 3. Editor Swap Files & Backups 
+                if (
+                    fileName.endsWith(".swp") ||        // Neovim/Vim swap files
+                    fileName.startsWith("~")) {         // General temp backup prefix
+                    return;
+                }
+    
+                // 4. Windows Alternate Data Streams
+                if (relativePath.contains("zone.identifier")) {
+                    return;
+                }
+    
                 state.put(relativePath, path.toFile().lastModified());
             });
             return state; 

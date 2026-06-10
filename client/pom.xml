@@ -61,8 +61,7 @@
             <plugin>
                 <groupId>com.akathist.maven.plugins.launch4j</groupId>
                 <artifactId>launch4j-maven-plugin</artifactId>
-                <version>2.4.1</version>
-                <executions>
+                <version>2.5.0</version> <executions>
                     
                     <execution>
                         <id>build-console-exe</id>
@@ -77,7 +76,9 @@
                                 <mainClass>SyncDaemon</mainClass>
                             </classPath>
                             <jre>
+                                <path>%JAVA_HOME%;%PATH%</path>
                                 <minVersion>17.0.0</minVersion>
+                                <jdkPreference>preferJre</jdkPreference>
                             </jre>
                         </configuration>
                     </execution>
@@ -95,7 +96,9 @@
                                 <mainClass>SyncDaemon</mainClass>
                             </classPath>
                             <jre>
+                                <path>%JAVA_HOME%;%PATH%</path>
                                 <minVersion>17.0.0</minVersion>
+                                <jdkPreference>preferJre</jdkPreference>
                             </jre>
                         </configuration>
                     </execution>
